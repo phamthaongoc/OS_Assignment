@@ -41,7 +41,7 @@ typedef ARG_TYPE arg_t;
  *            based on the address mode
  */
 #ifdef MM64
-#define FORMAT_ARG "%llu"
+#define FORMAT_ARG "%lu"
 #else
 #define FORMAT_ARG "%u"
 #endif
@@ -113,7 +113,11 @@ struct pcb_t
 	struct krnl_t *krnl;	
 	struct page_table_t *page_table; // Page table
 	uint32_t bp;			 // Break pointer
+#ifdef MM_PAGING
+	struct mm_struct *mm;    // Per-process memory management structure
+#endif
 };
+
 
 /* Kernel structure */
 struct krnl_t

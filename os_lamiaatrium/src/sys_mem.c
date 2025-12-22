@@ -1,12 +1,12 @@
-/*
- * Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM
- */
+// /*
+//  * Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM
+//  */
 
-/* LamiaAtrium release
- * Source Code License Grant: The authors hereby grant to Licensee
- * personal permission to use and modify the Licensed Source Code
- * for the sole purpose of studying while attending the course CO2018.
- */
+// /* LamiaAtrium release
+//  * Source Code License Grant: The authors hereby grant to Licensee
+//  * personal permission to use and modify the Licensed Source Code
+//  * for the sole purpose of studying while attending the course CO2018.
+//  */
 
 #include "os-mm.h"
 #include "syscall.h"
@@ -17,10 +17,11 @@
 #ifdef MM64
 #include "mm64.h"
 #else
+#include <string.h>
 #include "mm.h"
 #endif
 
-//typedef char BYTE;
+typedef char BYTE;
 
 int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
 {
@@ -30,12 +31,30 @@ int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
    /* TODO THIS DUMMY CREATE EMPTY PROC TO AVOID COMPILER NOTIFY 
     *      need to be eliminated
 	*/
-   //struct pcb_t *caller = malloc(sizeof(struct pcb_t));
-   struct pcb_t* caller = NULL;
-
-   if (krnl->running_list && krnl->running_list->size > 0) {
-       caller = krnl->running_list->proc[0];
+   struct pcb_t *caller = NULL;
+   struct queue_t *rq = krnl->ready_queue;
+   struct queue_t *running = krnl->running_list;
+   if(rq){
+    for(int i = 0; i < rq->size; i++) {
+        struct pcb_t *p = rq->proc[i];
+        if(p && p->pid == pid) {
+            caller = p;
+            break;
+        }
+    }
    }
+    if(!caller && running) {
+        for (int i = 0; i < running->size; i++) {
+            struct pcb_t *p = running->proc[i];
+            if(p && p->pid == pid) {
+                caller = p;
+                break;
+            }
+        }
+    }
+    if(!caller) {
+        return -1; // Process not found
+    }
    /*
     * @bksysnet: Please note in the dual spacing design
     *            syscall implementations are in kernel space.
@@ -49,9 +68,7 @@ int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
     /* TODO Maching and marking the process */
     /* user process are not allowed to access directly pcb in kernel space of syscall */
     //....
-   if (!caller || !caller->krnl || !caller->krnl->mram)
-       return -1;
-
+	
    switch (memop) {
    case SYSMEM_MAP_OP:
             /* Reserved process case*/
@@ -77,5 +94,4 @@ int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
    
    return 0;
 }
-
 

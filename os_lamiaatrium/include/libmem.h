@@ -16,9 +16,6 @@
 #define SYSMEM_IO_READ 4
 #define SYSMEM_IO_WRITE 5
 
-extern int enable_mem_log;
-
-
 extern struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid);
 int liballoc(struct pcb_t *, addr_t, uint32_t);
 int libfree(struct pcb_t *, uint32_t);

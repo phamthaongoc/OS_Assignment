@@ -60,9 +60,6 @@ int write(
 
 int run(struct pcb_t *proc)
 {
-
-	
-
 	/* Check if Program Counter point to the proper instruction */
 	if (proc->pc >= proc->code->size)
 	{

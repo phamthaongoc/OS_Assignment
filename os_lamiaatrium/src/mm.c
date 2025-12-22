@@ -16,6 +16,7 @@
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #if !defined(MM64)
 /*
@@ -136,8 +137,8 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
  **/
 uint32_t pte_get_entry(struct pcb_t *caller, addr_t pgn)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
-  return 0;
+  struct krnl_t *krnl = caller->krnl;
+  return krnl->mm->pgd[pgn];
 }
 
 /* Set PTE page table entry
@@ -173,7 +174,19 @@ addr_t vmap_page_range(struct pcb_t *caller,           // process call
                     struct framephy_struct *frames, // list of the mapped frames
                     struct vm_rg_struct *ret_rg)    // return mapped region, the real mapped fp
 {                                                   // no guarantee all given pages are mapped
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  addr_t a = addr;
+  struct framephy_struct *fp = frames;
+  for (int i = 0; i < pgnum; i++)
+  {
+      if (!fp) return -1;
+
+      addr_t pgn = PAGING_PGN(a);
+      pte_set_fpn(caller, pgn, fp->fpn);
+
+      fp = fp->fp_next;
+      a += PAGING_PAGESZ;
+  }
+
   return 0;
 }
 
@@ -186,7 +199,29 @@ addr_t vmap_page_range(struct pcb_t *caller,           // process call
 
 addr_t alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct **frm_lst)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  struct memphy_struct *mram = caller->krnl->mram;
+  *frm_lst = NULL;
+  for(int i=0; i<req_pgnum; i++) {
+    addr_t fpn;
+    if(MEMPHY_get_freefp(mram, &fpn) <0) {
+      /* Failed allocation, release all obtained frames */
+      // struct framephy_struct *iter = *frm_lst;
+      // struct framephy_struct *tmp;
+      // while(iter != NULL) {
+      //   tmp = iter;
+      //   iter = iter->fp_next;
+      //   MEMPHY_release_fp(mram, tmp->fpn);
+      // free(tmp);
+      // }
+      // *frm_lst = NULL;
+      return -1;
+    }
+    struct framephy_struct *newfp = malloc(sizeof(struct framephy_struct));
+    newfp->fpn = fpn;
+    newfp->fp_next = *frm_lst;
+    newfp->owner = caller->krnl->mm;
+    *frm_lst = newfp;
+  }
   return 0;
 }
 
@@ -199,10 +234,22 @@ addr_t alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_st
  * @incpgnum  : number of mapped page
  * @ret_rg    : returned region
  */
-addr_t vm_map_ram(struct pcb_t *caller, addr_t astart, addr_t aend, addr_t mapstart, int incpgnum, struct vm_rg_struct *ret_rg)
+addr_t vm_map_ram(struct pcb_t *caller,
+                  addr_t astart, addr_t aend,
+                  addr_t mapstart, int incpgnum,
+                  struct vm_rg_struct *ret_rg)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
-  return 0;
+    struct framephy_struct *frame = NULL;
+
+    /* Cấp phát incpgnum frame vật lý */
+    if (alloc_pages_range(caller, incpgnum, &frame) < 0)
+        return -1;
+
+    /* Map các frame này vào vùng ảo bắt đầu tại astart */
+    if (vmap_page_range(caller, astart, incpgnum, frame, ret_rg) < 0)
+        return -1;
+
+    return 0;
 }
 
 /* Swap copy content page from source frame to destination frame
@@ -214,7 +261,11 @@ addr_t vm_map_ram(struct pcb_t *caller, addr_t astart, addr_t aend, addr_t mapst
 int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
                    struct memphy_struct *mpdst, addr_t dstfpn)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  for(int i=0; i<PAGING_PAGESZ; i++) {
+    BYTE val;
+    MEMPHY_read(mpsrc, srcfpn * PAGING_PAGESZ + i, &val);
+    MEMPHY_write(mpdst, dstfpn * PAGING_PAGESZ + i, val);
+  }
   return 0;
 }
 
@@ -225,25 +276,46 @@ int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
  */
 int init_mm(struct mm_struct *mm, struct pcb_t *caller)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  mm->pgd = (uint32_t *)calloc(PAGING_MAX_PGN, sizeof(uint32_t));
+  if(!mm->pgd) return -1;
+  struct vm_area_struct *vma0 = (struct vm_area_struct *)malloc(sizeof(struct vm_area_struct));
+  if(!vma0) return -1;
+  vma0->vm_id = 0;
+  vma0->vm_start = 0;
+  vma0->vm_end = 0;
+  vma0->sbrk = 0;
+  vma0->vm_next = NULL;
+  vma0->vm_freerg_list = NULL;
+  mm->mmap = vma0;
+  mm->fifo_pgn = NULL;
+  memset(mm->symrgtbl, 0, sizeof(mm->symrgtbl));
   return 0;
 }
 
 struct vm_rg_struct *init_vm_rg(addr_t rg_start, addr_t rg_end)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
-  return 0;
+  struct vm_rg_struct *rg = malloc(sizeof(struct vm_rg_struct));
+  if(!rg) return NULL;
+  rg->rg_start = rg_start;
+  rg->rg_end = rg_end;
+  rg->rg_next = NULL;
+  return rg;
 }
 
 int enlist_vm_rg_node(struct vm_rg_struct **rglist, struct vm_rg_struct *rgnode)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  rgnode->rg_next = *rglist;
+  *rglist = rgnode;
   return 0;
 }
 
 int enlist_pgn_node(struct pgn_t **plist, addr_t pgn)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  struct pgn_t *newnode = malloc(sizeof(struct pgn_t));
+  if(!newnode) return -1;
+  newnode->pgn = pgn;
+  newnode->pg_next = *plist;
+  *plist = newnode;
   return 0;
 }
 
@@ -273,8 +345,50 @@ int print_list_pgn(struct pgn_t *ip)
 
 int print_pgtbl(struct pcb_t *caller, uint32_t start, uint32_t end)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
-  return 0;
+    struct mm_struct *mm = caller->krnl->mm;
+
+    /* Nếu end = -1 hoặc lớn hơn số page tối đa, cắt về PAGING_MAX_PGN */
+    if (end == (uint32_t)-1 || end > PAGING_MAX_PGN)
+        end = PAGING_MAX_PGN;
+
+    if (start > end)
+        return 0;
+
+    printf("---- Page Table ----\n");
+    for (uint32_t pgn = start; pgn < end; pgn++) {
+        uint32_t e = mm->pgd[pgn];
+        if (e & PAGING_PTE_PRESENT_MASK) {
+            addr_t fpn = GETVAL(e,
+                                PAGING_PTE_FPN_MASK,
+                                PAGING_PTE_FPN_LOBIT);
+            printf("VPN %u -> FPN %u\n", pgn, fpn);
+        }
+    }
+    printf("---------------------\n");
+    return 0;
 }
 
+
 #endif //ndef MM64
+
+/*
+ * 32-bit Paging Memory Manager (clean version)
+ * CO2018 – LamiaAtrium
+ */
+
+
+/*
+ * Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM
+ */
+
+/* LamiaAtrium release
+ * Source Code License Grant: The authors hereby grant to Licensee
+ * personal permission to use and modify the Licensed Source Code
+ * for the sole purpose of studying while attending the course CO2018.
+ */
+ 
+ /* NOTICE this moudle is deprecated in LamiaAtrium release
+  *        the structure is maintained for future 64bit-32bit
+  *        backward compatible feature or PAE feature 
+  */
+ 

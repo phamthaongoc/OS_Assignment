@@ -173,6 +173,19 @@ int MEMPHY_dump(struct memphy_struct *mp)
   /*TODO dump memphy contnt mp->storage
    *     for tracing the memory content
    */
+   if (mp == NULL || mp->storage == NULL || mp->maxsz <= 0){
+      printf("Invalid memory\n");
+      return -1;
+   }
+
+   for (int i = 0; i < mp->maxsz; i++){
+      BYTE data;
+      MEMPHY_read(mp, i, &data);
+      if (data != 0){
+         //BYTE [Địa chỉ Hex] : [Giá trị Decimal]
+         printf("BYTE %08x : %d\n", i, (uint32_t)data);
+      }      
+   }
    return 0;
 }
 
